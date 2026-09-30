@@ -7,30 +7,21 @@ final class Codes {
     static final int PRESET_B = 0;
     static final int PRESET_A = 1;
 
-    /** Row-major, 6 rows x 4 columns, exactly like the on-screen layout. */
-    private static final int[][] PRESETS = {
-        {   // Standard B
-            0xFF00FF, 0xFF807F, 0xFF40BF, 0xFFC03F,
-            0xFF20DF, 0xFFA05F, 0xFF609F, 0xFFE01F,
-            0xFF10EF, 0xFF906F, 0xFF50AF, 0xFFD02F,
-            0xFF30CF, 0xFFB04F, 0xFF708F, 0xFFF00F,
-            0xFF08F7, 0xFF8877, 0xFF48B7, 0xFFC837,
-            0xFF28D7, 0xFFA857, 0xFF6897, 0xFFE817,
-        },
-        {   // Standard A
-            0xFF3AC5, 0xFFBA45, 0xFF827D, 0xFF02FD,
-            0xFF1AE5, 0xFF9A65, 0xFFA25D, 0xFF22DD,
-            0xFF2AD5, 0xFFAA55, 0xFF926D, 0xFF12ED,
-            0xFF0AF5, 0xFF8A75, 0xFFB24D, 0xFF32CD,
-            0xFF38C7, 0xFFB847, 0xFF7887, 0xFF28D7,
-            0xFF18E7, 0xFF9867, 0xFF58A7, 0xFF08F7,
-        },
-    };
+    /**
+     * 24-key RGB LED remote: NEC commands 0x00..0x17 in row-major order, 6 rows x 4 columns,
+     * exactly like the on-screen layout. Only the address differs between remote batches.
+     */
+    private static final int[] ADDRESS = {0x00FF, 0x00F7};   // NEC address 0x00 (most common) / 0xEF00
+
+    private static int nec(int address, int command) {
+        int cmd = Integer.reverse(command) >>> 24;             // LSB-first on air -> MSB-first value
+        return (address << 16) | (cmd << 8) | (~cmd & 0xFF);
+    }
 
     private Codes() {}
 
     static int preset(int preset, int index) {
-        return PRESETS[preset][index];
+        return nec(ADDRESS[preset], index);
     }
 
     static String format(int code) {

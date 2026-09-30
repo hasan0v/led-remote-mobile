@@ -5,8 +5,8 @@
     <string name="haptics">Basanda vibrasiya</string>
     <string name="hold_repeat">Basılı saxlayanda təkrarla (parlaqlıq)</string>
     <string name="preset">Kod dəsti</string>
-    <string name="preset_b">Standart B (FF00FF, FF807F, …)</string>
-    <string name="preset_a">Standart A (FF3AC5, FFBA45, …)</string>
+    <string name="preset_b">Standart (00FF…: FF00FF, FF807F, …)</string>
+    <string name="preset_a">Alternativ (F7…: F700FF, F7807F, …)</string>
     <string name="edit_mode">Kod redaktə rejimi</string>
     <string name="edit_mode_hint">Kodu dəyişmək üçün düyməyə toxunun</string>
     <string name="reset_codes">Fərdi kodları sıfırla</string>
@@ -20,5 +20,5 @@
     <string name="save">Yadda saxla</string>
     <string name="cancel">Ləğv et</string>
     <string name="reset_one">Standart</string>
-    <string name="about">LED Remote 1.0 · 24 düyməli NEC IR pult</string>
+    <string name="about">LED Remote 1.1 · 24 düyməli NEC IR pult</string>
 </resources>

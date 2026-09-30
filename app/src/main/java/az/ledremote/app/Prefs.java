@@ -4,7 +4,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 
 final class Prefs {
-    private static final String CUSTOM = "code_";
+    private static final String CUSTOM = "code2_";
     private final SharedPreferences sp;
 
     Prefs(Context c) {

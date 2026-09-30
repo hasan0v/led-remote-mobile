@@ -37,17 +37,19 @@ final class IrController {
         }
     }
 
+    /**
+     * Codes are written the way IR receivers (Arduino IRremote, LIRC dumps) print them:
+     * the 32-bit value is the bit stream in transmission order, most significant bit first.
+     * E.g. 00FF807F = address 0x00, command 0x01.
+     */
     static int[] frame(int code) {
         int[] p = new int[2 + 64 + 1];
         int n = 0;
         p[n++] = 9000;
         p[n++] = 4500;
-        for (int byteIdx = 3; byteIdx >= 0; byteIdx--) {
-            int b = (code >>> (byteIdx * 8)) & 0xFF;
-            for (int bit = 0; bit < 8; bit++) {          // LSB first
-                p[n++] = UNIT;
-                p[n++] = ((b >> bit) & 1) == 1 ? 3 * UNIT : UNIT;
-            }
+        for (int bit = 31; bit >= 0; bit--) {
+            p[n++] = UNIT;
+            p[n++] = ((code >>> bit) & 1) == 1 ? 1690 : UNIT;
         }
         p[n] = UNIT;
         return p;
