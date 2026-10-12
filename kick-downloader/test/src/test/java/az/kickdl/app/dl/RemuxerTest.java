@@ -37,4 +37,43 @@ public class RemuxerTest {
         assertTrue(Remuxer.isAac("audio/mp4a-latm"));
         assertFalse(Remuxer.isAac("audio/mpeg"));
     }
+
+    static byte[] adts(int payloadLen, boolean crc, int fill) {
+        int header = crc ? 9 : 7, len = header + payloadLen;
+        byte[] f = new byte[len];
+        f[0] = (byte) 0xFF;
+        f[1] = (byte) (crc ? 0xF0 : 0xF1);
+        f[2] = 0x4C;
+        f[3] = (byte) (0x80 | ((len >> 11) & 0x03));
+        f[4] = (byte) ((len >> 3) & 0xFF);
+        f[5] = (byte) (((len & 7) << 5) | 0x1F);
+        f[6] = (byte) 0xFC;
+        for (int i = header; i < len; i++) f[i] = (byte) fill;
+        return f;
+    }
+
+    @Test public void splitsConcatenatedFrames() {
+        byte[] a = adts(300, false, 1), b = adts(411, true, 2), c = adts(5, false, 3);
+        ByteBuffer buf = ByteBuffer.allocateDirect(4096);
+        buf.put(a).put(b).put(c);
+        int size = a.length + b.length + c.length;
+        int[] out = new int[64];
+        assertEquals(3, Remuxer.splitAdts(buf, size, out));
+        assertEquals(7, out[0]);
+        assertEquals(300, out[1]);
+        assertEquals(a.length + 9, out[2]);
+        assertEquals(411, out[3]);
+        assertEquals(a.length + b.length + 7, out[4]);
+        assertEquals(5, out[5]);
+        for (int i = out[2]; i < out[2] + out[3]; i++) assertEquals(2, buf.get(i));
+    }
+
+    @Test public void rawSampleIsOneFrame() {
+        ByteBuffer buf = ByteBuffer.allocateDirect(64);
+        buf.put(new byte[]{0x21, 0x10, 0x05, 0x00});
+        int[] out = new int[8];
+        assertEquals(1, Remuxer.splitAdts(buf, 40, out));
+        assertEquals(0, out[0]);
+        assertEquals(40, out[1]);
+    }
 }

@@ -42,6 +42,8 @@ final class Remuxer {
             int[] map = new int[n];
             boolean[] audioTrack = new boolean[n];
             boolean[] aacTrack = new boolean[n];
+            long[] frameUs = new long[n];
+            long[] nextPts = new long[n];
             long durUs = 0;
             int maxSize = 2 * 1024 * 1024;
             boolean hasVideo = false, hasAudio = false;
@@ -60,6 +62,8 @@ final class Remuxer {
                 if (a && isAac(mime)) {
                     target = cleanAacFormat(inPath, i, f);
                     aacTrack[i] = true;
+                    frameUs[i] = 1024L * 1_000_000L / target.getInteger(MediaFormat.KEY_SAMPLE_RATE);
+                    nextPts[i] = -1;
                 }
                 try {
                     map[i] = mux.addTrack(target);
@@ -78,6 +82,8 @@ final class Remuxer {
             if (durUs <= 0 && durationSecHint > 0) durUs = (long) (durationSecHint * 1_000_000);
             mux.start();
             ByteBuffer buf = ByteBuffer.allocateDirect(Math.max(maxSize, 8 * 1024 * 1024));
+            ByteBuffer frameBuf = ByteBuffer.allocateDirect(16 * 1024);
+            int[] frames = new int[2 * 256];
             MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
             long[] last = new long[n];
             for (int i = 0; i < n; i++) last[i] = -1;
@@ -90,24 +96,45 @@ final class Remuxer {
                 long pts = ex.getSampleTime();
                 if (track >= 0 && track < n && map[track] >= 0 && pts >= 0) {
                     long rel = Math.max(0, pts - base);
-                    int offset = 0;
                     if (aacTrack[track]) {
-                        offset = adtsHeaderLength(buf, size);
-                        if (offset >= size) offset = 0;
-                    }
-                    info.offset = offset;
-                    info.size = size - offset;
-                    info.presentationTimeUs = rel;
-                    info.flags = (ex.getSampleFlags() & MediaExtractor.SAMPLE_FLAG_SYNC) != 0 ? MediaCodec.BUFFER_FLAG_KEY_FRAME : 0;
-                    // Audio must be strictly increasing; drop overlapping packets after discontinuities.
-                    if (!audioTrack[track] || rel > last[track]) {
-                        if (audioTrack[track]) info.flags = MediaCodec.BUFFER_FLAG_KEY_FRAME;
-                        buf.position(offset);
-                        buf.limit(size);
-                        mux.writeSampleData(map[track], buf, info);
-                        last[track] = rel;
-                        if (audioTrack[track]) audioSamples++;
-                        else videoSamples++;
+                        // One extracted sample may hold several ADTS frames: write each raw AAC frame
+                        // as its own MP4 sample on a gap-free 1024-sample timeline.
+                        int count = splitAdts(buf, size, frames);
+                        for (int k = 0; k < count; k++) {
+                            int start = frames[2 * k], len = frames[2 * k + 1];
+                            if (len <= 0 || len > frameBuf.capacity()) continue;
+                            long srcPts = rel + k * frameUs[track];
+                            long p = nextPts[track] < 0 || Math.abs(srcPts - nextPts[track]) > 80_000 ? srcPts : nextPts[track];
+                            if (p <= last[track]) p = last[track] + 1;
+                            frameBuf.clear();
+                            ByteBuffer src = buf.duplicate();
+                            src.limit(start + len);
+                            src.position(start);
+                            frameBuf.put(src);
+                            frameBuf.flip();
+                            info.offset = 0;
+                            info.size = len;
+                            info.presentationTimeUs = p;
+                            info.flags = MediaCodec.BUFFER_FLAG_KEY_FRAME;
+                            mux.writeSampleData(map[track], frameBuf, info);
+                            last[track] = p;
+                            nextPts[track] = p + frameUs[track];
+                            audioSamples++;
+                        }
+                    } else {
+                        info.offset = 0;
+                        info.size = size;
+                        info.presentationTimeUs = rel;
+                        info.flags = (ex.getSampleFlags() & MediaExtractor.SAMPLE_FLAG_SYNC) != 0 ? MediaCodec.BUFFER_FLAG_KEY_FRAME : 0;
+                        if (!audioTrack[track] || rel > last[track]) {
+                            if (audioTrack[track]) info.flags = MediaCodec.BUFFER_FLAG_KEY_FRAME;
+                            buf.position(0);
+                            buf.limit(size);
+                            mux.writeSampleData(map[track], buf, info);
+                            last[track] = rel;
+                            if (audioTrack[track]) audioSamples++;
+                            else videoSamples++;
+                        }
                     }
                     if (cb != null && durUs > 0 && rel - lastReport > 2_000_000) {
                         lastReport = rel;
@@ -186,6 +213,38 @@ final class Remuxer {
         int b0 = b.get(0) & 0xFF, b1 = b.get(1) & 0xFF;
         if (b0 != 0xFF || (b1 & 0xF6) != 0xF0) return 0; // sync word + layer 00
         return (b1 & 0x01) == 1 ? 7 : 9;
+    }
+
+    /**
+     * Splits a sample into raw AAC frames. Writes (start, length) pairs of the payloads (ADTS headers
+     * removed) into out and returns the frame count. A sample without ADTS framing is one raw frame.
+     */
+    static int splitAdts(ByteBuffer b, int size, int[] out) {
+        int count = 0, off = 0;
+        if (adtsHeaderLength(at(b, 0), size) == 0) {
+            out[0] = 0;
+            out[1] = size;
+            return 1;
+        }
+        while (off + 7 <= size && count < out.length / 2) {
+            int b0 = b.get(off) & 0xFF, b1 = b.get(off + 1) & 0xFF;
+            if (b0 != 0xFF || (b1 & 0xF6) != 0xF0) break; // lost sync: ignore the rest
+            int header = (b1 & 0x01) == 1 ? 7 : 9;
+            int frameLen = ((b.get(off + 3) & 0x03) << 11) | ((b.get(off + 4) & 0xFF) << 3) | ((b.get(off + 5) & 0xE0) >> 5);
+            if (frameLen <= header) break;
+            int end = Math.min(size, off + frameLen);
+            out[2 * count] = off + header;
+            out[2 * count + 1] = end - (off + header);
+            count++;
+            off += frameLen;
+        }
+        return count;
+    }
+
+    private static ByteBuffer at(ByteBuffer b, int index) {
+        ByteBuffer d = b.duplicate();
+        d.position(index);
+        return d.slice();
     }
 
     /** ADTS header -> 2-byte AudioSpecificConfig. */
