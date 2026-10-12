@@ -1,6 +1,6 @@
 # <img src="docs/screenshots/icon.png" width="36" align="top"> Kick Downloader (Android)
 
-Kick.com kanallarının yayım arxivlərini (VOD), kliplərini və canlı yayımlarını telefona yükləyən, minimalist **glassmorphism** dizaynlı Android tətbiqi. Heç bir xarici kitabxana yoxdur — yalnız Android framework API-ləri (APK ≈ 210 KB).
+Kick.com kanallarının yayım arxivlərini (VOD), kliplərini və canlı yayımlarını telefona yükləyən, minimalist **glassmorphism** dizaynlı Android tətbiqi. Heç bir xarici kitabxana yoxdur — yalnız Android framework API-ləri (APK ≈ 230 KB).
 
 **APK:** [`dist/KickDownloader.apk`](dist/KickDownloader.apk) · Android 8.0+ (API 26)
 
