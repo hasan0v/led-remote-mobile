@@ -13,3 +13,9 @@ Native Android (Java, no dependencies) 24-key IR remote for LED strips. It trans
 `./build.sh` → `dist/led-remote.apk` (needs JDK 17+, `aapt zipalign apksigner dalvik-exchange libandroid-23-java`).
 
 The APK is signed with `keystore/release.keystore` (password `android`, hobby-grade key) so updates install over each other.
+
+---
+
+## Kick Downloader
+
+Bu repoda həmçinin **[Kick Downloader](kick-downloader/)** Android tətbiqi var — Kick kanallarının VOD/klip/canlı yayımlarını keyfiyyət və ölçü seçimi ilə yükləyən, detallı pleyerli glassmorphism tətbiq. APK: [`kick-downloader/dist/KickDownloader.apk`](kick-downloader/dist/KickDownloader.apk).

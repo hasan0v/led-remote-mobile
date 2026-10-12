@@ -4,3 +4,8 @@ local.properties
 *.iml
 .idea/
 dist/*.idsig
+kick-downloader/build/
+kick-downloader/test/build/
+kick-downloader/test/.gradle/
+kick-downloader/test/libs/
+kick-downloader/dist/*.idsig

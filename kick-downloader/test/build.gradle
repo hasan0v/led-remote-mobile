@@ -1,0 +1,47 @@
+// JVM tests (Robolectric) for the app. Run from the repo:  ./build.sh && gradle -p test cleanTest test
+// One-time setup: ./test/setup-monitor.sh (builds androidx.test:monitor from source; Google Maven may be unreachable)
+plugins { id 'java' }
+repositories { mavenCentral() }
+java { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+
+def androidJar = file("${System.getProperty('user.home')}/android-sdk/platforms/android-35/android.jar")
+def cfgDir = file("$buildDir/robo-config")
+
+sourceSets {
+    main { java { srcDirs = ["$rootDir/../app/src/main/java", "$rootDir/../build/gen"] } }
+    test { resources { srcDir cfgDir } }
+}
+configurations { instr14; instr15 }
+dependencies {
+    instr14 'org.robolectric:android-all-instrumented:14-robolectric-10818077-i7'
+    instr15 'org.robolectric:android-all-instrumented:15-robolectric-12650502-i7'
+    compileOnly files(androidJar)
+    testCompileOnly files(androidJar)
+    testRuntimeOnly 'org.robolectric:android-all:14-robolectric-10818077'
+    testImplementation files("$rootDir/libs/androidx-test-monitor.jar")
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation('org.robolectric:robolectric:4.14.1') { exclude group: 'androidx.test'; exclude group: 'androidx.test.espresso' }
+}
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8'; options.compilerArgs << '-nowarn' }
+
+tasks.register('roboConfig') {
+    doLast {
+        def f = file("$cfgDir/com/android/tools/test_config.properties")
+        f.parentFile.mkdirs()
+        f.text = "android_merged_manifest=${file("$rootDir/../app/src/main/AndroidManifest.xml").absolutePath}\n" +
+                "android_resource_apk=${file("$rootDir/../build/unsigned.apk").absolutePath}\n" +
+                "android_custom_package=az.kickdl.app\n"
+    }
+}
+processTestResources.dependsOn 'roboConfig'
+tasks.register('copyInstr', Copy) { from configurations.instr14; from configurations.instr15; into "$buildDir/robodeps" }
+
+test {
+    dependsOn 'copyInstr'
+    systemProperty 'robolectric.offline', 'true'
+    systemProperty 'robolectric.dependency.dir', "$buildDir/robodeps"
+    systemProperty 'shots.dir', "$buildDir/shots"
+    maxHeapSize = '3g'
+    jvmArgs '-Djava.awt.headless=true', '--add-opens', 'java.base/java.io=ALL-UNNAMED', '--add-opens', 'java.base/java.lang=ALL-UNNAMED', '--add-opens', 'java.base/java.nio=ALL-UNNAMED'
+    testLogging { exceptionFormat 'full'; events 'passed', 'failed', 'skipped' }
+}
