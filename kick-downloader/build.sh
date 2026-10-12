@@ -39,7 +39,7 @@ mkdir -p "$OUT/classes" "$OUT/desugared" "$OUT/gen" "$OUT/apk" dist
 
 "$BT/aapt2" compile --dir "$SRC/res" -o "$OUT/res.zip"
 "$BT/aapt2" link -I "$RES_JAR" --manifest "$SRC/AndroidManifest.xml" -o "$OUT/unsigned.apk" \
-  --java "$OUT/gen" --min-sdk-version 26 --target-sdk-version 34 --version-code 2 --version-name 1.0.1 \
+  --java "$OUT/gen" --min-sdk-version 26 --target-sdk-version 34 --version-code 3 --version-name 1.0.2 \
   --auto-add-overlay "$OUT/res.zip"
 
 javac --release 8 -Xlint:-options -encoding UTF-8 -nowarn -cp "$COMPILE_JAR" -d "$OUT/classes" \
