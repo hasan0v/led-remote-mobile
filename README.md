@@ -5,6 +5,7 @@ Native Android (Java, no dependencies) 24-key IR remote for LED strips. It trans
 - Pixel-style dark UI with the same 24 keys as the original remote (brightness ±, OFF/ON, R/G/B/W, 12 colours, FLASH/STROBE/FADE/SMOOTH)
 - Press feedback (glow + haptics), brightness keys repeat while held (NEC repeat frame)
 - Settings (top-right): haptics, hold-repeat, code set A/B, **code edit mode** (tap a key to change its hex code), reset
+- Control center (Quick Settings) tiles: **LED Remote** opens the 24-key remote over the panel, **LED** toggles power
 - Azerbaijani + English UI
 - Needs a phone with an IR emitter (many Xiaomi/Redmi/Huawei/Samsung-older models)
 

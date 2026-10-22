@@ -38,6 +38,13 @@ final class Prefs {
     int size() { return sp.getInt("size", SIZE_NORMAL); }
     void setSize(int v) { sp.edit().putInt("size", v).apply(); }
 
+    /** Tile opens the remote as a separate floating window instead of a dialog over the control center. */
+    boolean tileWindow() { return sp.getBoolean("tile_window", false); }
+    void setTileWindow(boolean v) { sp.edit().putBoolean("tile_window", v).apply(); }
+
+    boolean powerOn() { return sp.getBoolean("power_on", false); }
+    void setPowerOn(boolean v) { sp.edit().putBoolean("power_on", v).apply(); }
+
     int preset() { return sp.getInt("preset", Codes.PRESET_B); }
     void setPreset(int v) { sp.edit().putInt("preset", v).apply(); }
 

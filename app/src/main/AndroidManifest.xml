@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="az.ledremote.app"
-    android:versionCode="3"
-    android:versionName="1.2.0">
+    android:versionCode="4"
+    android:versionName="1.3.0">
 
     <uses-sdk
         android:minSdkVersion="21"
@@ -31,6 +31,42 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
+            </intent-filter>
         </activity>
+
+        <activity
+            android:name=".QuickRemoteActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:taskAffinity="az.ledremote.app.quick"
+            android:theme="@style/QuickTheme" />
+
+        <service
+            android:name=".RemoteTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_remote"
+            android:label="@string/tile_remote"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".PowerTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_power"
+            android:label="@string/tile_power"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="true" />
+        </service>
     </application>
 </manifest>

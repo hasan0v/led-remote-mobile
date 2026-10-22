@@ -2,6 +2,11 @@ package az.ledremote.app;
 
 import android.app.Activity;
 import android.app.Dialog;
+import android.app.StatusBarManager;
+import android.content.ComponentName;
+import android.graphics.drawable.Icon;
+import android.os.Build;
+import java.util.function.Consumer;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.graphics.Canvas;
@@ -42,18 +47,6 @@ public class MainActivity extends Activity {
     private static final int TXT_DIM = 0xFF8F96A1;
     private static final int ACCENT = 0xFF6FB1FF;
     private static final int WARN = 0xFFE58A4A;
-    private static final long REPEAT_DELAY_MS = 450;
-    private static final long REPEAT_PERIOD_MS = 108;
-
-    private static final int DARK = 0xFF1E1E1E;
-    private static final int LIGHT = 0xFFF4F4F4;
-    private static final int MODE = 0xFFF1F3F5;
-
-    private static final String[] NAMES = {
-        "☀ +", "☀ −", "OFF", "ON", "R", "G", "B", "W",
-        "Color 9", "Color 10", "Color 11", "FLASH", "Color 13", "Color 14", "Color 15", "STROBE",
-        "Color 17", "Color 18", "Color 19", "FADE", "Color 21", "Color 22", "Color 23", "SMOOTH",
-    };
 
     private Prefs prefs;
     private IrController ir;
@@ -63,42 +56,9 @@ public class MainActivity extends Activity {
     private boolean editMode;
     private long lastNoIrToast;
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private Runnable repeater;
+    private KeySender sender;
     private final Runnable restoreStatus = new Runnable() {
         @Override public void run() { refreshStatus(); }
-    };
-
-    // label, kind, top, bottom, text color
-    private static final Object[][] KEYS = {
-        {"", RemoteButton.KIND_SUN_BIG, 0xFFFFFFFF, 0xFFC4C4C4, DARK},
-        {"", RemoteButton.KIND_SUN_SMALL, 0xFFFFFFFF, 0xFFC4C4C4, DARK},
-        {"OFF", RemoteButton.KIND_TEXT, 0xFF363636, 0xFF0A0A0A, LIGHT},
-        {"ON", RemoteButton.KIND_TEXT, 0xFFEA6666, 0xFFAE2A2A, LIGHT},
-
-        {"R", RemoteButton.KIND_TEXT, 0xFFE35656, 0xFFAE2B2B, LIGHT},
-        {"G", RemoteButton.KIND_TEXT, 0xFF66B274, 0xFF387B48, LIGHT},
-        {"B", RemoteButton.KIND_TEXT, 0xFF4A7BC2, 0xFF22467C, LIGHT},
-        {"W", RemoteButton.KIND_TEXT, 0xFFFFFFFF, 0xFFC4C4C4, DARK},
-
-        {"", RemoteButton.KIND_COLOR, 0xFFEFB47B, 0xFFC5864E, 0},
-        {"", RemoteButton.KIND_COLOR, 0xFF8AC88C, 0xFF5AA064, 0},
-        {"", RemoteButton.KIND_COLOR, 0xFF6DA8DC, 0xFF477BAF, 0},
-        {"FLASH", RemoteButton.KIND_TEXT, 0xFF97A4B1, 0xFF566472, MODE},
-
-        {"", RemoteButton.KIND_COLOR, 0xFFF09F6A, 0xFFBC652B, 0},
-        {"", RemoteButton.KIND_COLOR, 0xFF9ED7C6, 0xFF6EAA99, 0},
-        {"", RemoteButton.KIND_COLOR, 0xFF7964B2, 0xFF36286E, 0},
-        {"STROBE", RemoteButton.KIND_TEXT, 0xFF97A4B1, 0xFF566472, MODE},
-
-        {"", RemoteButton.KIND_COLOR, 0xFFF8D266, 0xFFD29D3B, 0},
-        {"", RemoteButton.KIND_COLOR, 0xFF57B1A7, 0xFF2B7E77, 0},
-        {"", RemoteButton.KIND_COLOR, 0xFFA46CB2, 0xFF703D80, 0},
-        {"FADE", RemoteButton.KIND_TEXT, 0xFF97A4B1, 0xFF566472, MODE},
-
-        {"", RemoteButton.KIND_COLOR, 0xFFFCF872, 0xFFD9D141, 0},
-        {"", RemoteButton.KIND_COLOR, 0xFF559DAF, 0xFF2B6A7C, 0},
-        {"", RemoteButton.KIND_COLOR, 0xFFDD99C3, 0xFFB46F99, 0},
-        {"SMOOTH", RemoteButton.KIND_TEXT, 0xFF97A4B1, 0xFF566472, MODE},
     };
 
     @Override
@@ -107,6 +67,9 @@ public class MainActivity extends Activity {
         prefs = new Prefs(this);
         ir = new IrController(this);
         feedback = new Feedback(this);
+        sender = new KeySender(this, prefs, ir, feedback, new Runnable() {
+            @Override public void run() { if (head != null) head.flash(); }
+        });
         setContentView(buildUi(true));
         applyWindowPrefs();
         refreshStatus();
@@ -191,24 +154,10 @@ public class MainActivity extends Activity {
         View gap = new View(this);
         card.addView(gap, new LinearLayout.LayoutParams(-1, dp(6)));
 
-        for (int row = 0; row < 6; row++) {
-            LinearLayout line = new LinearLayout(this);
-            line.setOrientation(LinearLayout.HORIZONTAL);
-            line.setClipChildren(false);
-            for (int col = 0; col < 4; col++) {
-                int i = row * 4 + col;
-                Object[] s = KEYS[i];
-                RemoteButton b = new RemoteButton(this, i, (Integer) s[1], (String) s[0],
-                        (Integer) s[2], (Integer) s[3], (Integer) s[4]);
-                b.setContentDescription(NAMES[i]);
-                b.setListener(new RemoteButton.Listener() {
-                    @Override public void onDown(RemoteButton v) { onKeyDown(v); }
-                    @Override public void onUp(RemoteButton v) { onKeyUp(); }
-                });
-                line.addView(b, new LinearLayout.LayoutParams(0, -2, 1f));
-            }
-            card.addView(line, new LinearLayout.LayoutParams(-1, -2));
-        }
+        Keypad.addRows(this, card, new RemoteButton.Listener() {
+            @Override public void onDown(RemoteButton v) { onKeyDown(v); }
+            @Override public void onUp(RemoteButton v) { onKeyUp(); }
+        });
 
         status = new TextView(this);
         status.setTextSize(13);
@@ -272,12 +221,12 @@ public class MainActivity extends Activity {
     // ---------------------------------------------------------------- keys
 
     private void onKeyDown(final RemoteButton b) {
-        feedback.press(prefs.vibration(), prefs.sound());
         if (editMode) {
+            feedback.press(prefs.vibration(), prefs.sound());
             showCodeDialog(b.index);
             return;
         }
-        if (!ir.isAvailable()) {
+        if (!sender.down(b.index)) {
             long now = System.currentTimeMillis();
             if (now - lastNoIrToast > 3000) {
                 lastNoIrToast = now;
@@ -288,42 +237,21 @@ public class MainActivity extends Activity {
             }).start();
             return;
         }
-        int code = prefs.code(b.index);
-        ir.send(code);
-        blink();
         if (prefs.showCode()) {
             handler.removeCallbacks(restoreStatus);
-            status.setText("↗  " + NAMES[b.index] + "   " + Codes.format(code));
+            status.setText("↗  " + Keypad.NAMES[b.index] + "   " + Codes.format(prefs.code(b.index)));
             status.setTextColor(ACCENT);
             handler.postDelayed(restoreStatus, 1600);
-        }
-        if (prefs.holdRepeat() && b.index < 2) {
-            stopRepeat();
-            repeater = new Runnable() {
-                @Override public void run() {
-                    ir.repeat();
-                    blink();
-                    handler.postDelayed(this, REPEAT_PERIOD_MS);
-                }
-            };
-            handler.postDelayed(repeater, REPEAT_DELAY_MS);
         }
     }
 
     private void onKeyUp() {
-        stopRepeat();
-        if (!editMode) feedback.release(prefs.vibration(), prefs.sound());
-    }
-
-    private void blink() {
-        if (prefs.indicator()) head.flash();
+        if (editMode) return;
+        sender.up();
     }
 
     private void stopRepeat() {
-        if (repeater != null) {
-            handler.removeCallbacks(repeater);
-            repeater = null;
-        }
+        if (sender != null) sender.stop();
     }
 
     // ---------------------------------------------------------------- settings sheet
@@ -442,6 +370,41 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void actionRow(LinearLayout group, String label, View.OnClickListener l) {
+        if (group.getChildCount() > 0) divider(group);
+        Button b = flat(label, ACCENT);
+        b.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+        b.setPadding(0, 0, 0, 0);
+        b.setMinHeight(dp(52));
+        b.setOnClickListener(l);
+        group.addView(b, new LinearLayout.LayoutParams(-1, -2));
+    }
+
+    /** Android 13+ shows the system "Add tile" prompt; older versions need the manual edit route. */
+    private void requestTile(Class<?> service, int label, int icon) {
+        if (Build.VERSION.SDK_INT < 33) {
+            Toast.makeText(this, R.string.tiles_manual, Toast.LENGTH_LONG).show();
+            return;
+        }
+        try {
+            StatusBarManager sbm = getSystemService(StatusBarManager.class);
+            sbm.requestAddTileService(new ComponentName(this, service), getString(label),
+                    Icon.createWithResource(this, icon), getMainExecutor(), new Consumer<Integer>() {
+                @Override public void accept(Integer result) {
+                    if (result == StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED) {
+                        Toast.makeText(MainActivity.this, R.string.tile_added, Toast.LENGTH_SHORT).show();
+                    } else if (result == StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED) {
+                        Toast.makeText(MainActivity.this, R.string.tile_exists, Toast.LENGTH_SHORT).show();
+                    } else if (result >= 1000) {
+                        Toast.makeText(MainActivity.this, R.string.tiles_manual, Toast.LENGTH_LONG).show();
+                    }
+                }
+            });
+        } catch (RuntimeException e) {
+            Toast.makeText(this, R.string.tiles_manual, Toast.LENGTH_LONG).show();
+        }
+    }
+
     private void showSettings() {
         final Dialog d = new Dialog(this, R.style.DialogTheme);
         d.requestWindowFeature(Window.FEATURE_NO_TITLE);
@@ -537,6 +500,27 @@ public class MainActivity extends Activity {
             @Override public void onCheckedChanged(CompoundButton b, boolean c) { prefs.setFullscreen(c); applyWindowPrefs(); }
         });
 
+        // Control center tiles
+        LinearLayout qs = section(body, getString(R.string.sec_tiles));
+        actionRow(qs, getString(R.string.add_tile_remote), new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                requestTile(RemoteTileService.class, R.string.tile_remote, R.drawable.ic_tile_remote);
+            }
+        });
+        actionRow(qs, getString(R.string.add_tile_power), new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                requestTile(PowerTileService.class, R.string.tile_power, R.drawable.ic_tile_power);
+            }
+        });
+        segmented(qs, getString(R.string.tile_mode), new String[]{
+                getString(R.string.tile_mode_dialog), getString(R.string.tile_mode_window)},
+                prefs.tileWindow() ? 1 : 0, new Choice() {
+            @Override public void onChoose(int i) { prefs.setTileWindow(i == 1); }
+        });
+        TextView hint = text(getString(R.string.tiles_hint), 12.5f, TXT_DIM, false);
+        hint.setPadding(0, dp(10), 0, dp(12));
+        qs.addView(hint);
+
         // Advanced
         LinearLayout adv = section(body, getString(R.string.sec_advanced));
         toggle(adv, getString(R.string.edit_mode), editMode, new CompoundButton.OnCheckedChangeListener() {
@@ -597,7 +581,7 @@ public class MainActivity extends Activity {
         box.setPadding(dp(22), dp(20), dp(14), dp(10));
 
         box.addView(text(getString(R.string.code_title), 18, TXT, true));
-        TextView key = text(NAMES[index] + (prefs.isCustom(index) ? "  ·  " + getString(R.string.custom) : ""), 13, TXT_DIM, false);
+        TextView key = text(Keypad.NAMES[index] + (prefs.isCustom(index) ? "  ·  " + getString(R.string.custom) : ""), 13, TXT_DIM, false);
         key.setPadding(0, dp(4), 0, 0);
         box.addView(key);
 
